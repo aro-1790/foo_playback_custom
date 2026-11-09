@@ -1,0 +1,61 @@
+// The configuration page's dialog template: the original's controls in three
+// groups, with foo_custominfo's selector replaced by the storage choice.
+
+#include "resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+IDD_CONFIG DIALOGEX 0, 0, 302, 282
+// No WS_CLIPCHILDREN: the group boxes don't erase their interiors, so the page
+// paints the background under the controls; clipping would leave remnants.
+// No WS_VSCROLL: the layout fits the host's page area, so there is nothing to
+// scroll and no scroll code in the page.
+STYLE DS_SETFONT | WS_CHILD | WS_CLIPSIBLINGS
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    // The caption is the question the radios answer, so none of them repeats it.
+    // The first three share a row; the other two sit beside their control.
+    GROUPBOX        "Update when...?",IDC_STATIC,6,6,290,62
+    // Each width includes the radio's circle, which the dialog draws inside the
+    // control: 10 units of the width are not text.
+    CONTROL         "Never",IDC_TIMING_DISABLE,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,14,20,40,10
+    CONTROL         "Track has started",IDC_TIMING_START,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,58,20,80,10
+    CONTROL         "Track has ended",IDC_TIMING_END,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,142,20,78,10
+    CONTROL         "Track percentage reaches",IDC_TIMING_PERCENT,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,14,36,114,10
+    CONTROL         "",IDC_PERCENT_SLIDER,"msctls_trackbar32",TBS_HORZ | TBS_NOTICKS | WS_TABSTOP,132,34,92,14
+    EDITTEXT        IDC_PERCENT_TEXT,228,36,24,12,ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "%",IDC_PERCENT_LABEL,256,38,10,8
+    CONTROL         "Track duration reaches",IDC_TIMING_SECONDS,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,14,52,114,10
+    EDITTEXT        IDC_SECONDS_EDIT,132,50,36,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "seconds",IDC_SECONDS_LABEL,172,52,40,8
+
+    // The written statistics and their tag names, plus the library filter that
+    // decides whether a play counts at all.
+    GROUPBOX        "Tags",IDC_STATIC,6,74,290,88
+    // WS_GROUP closes the timing radios' group, which the slider above it already
+    // split; the page also keeps them exclusive by ID range (WM_COMMAND).
+    CONTROL         "Play Count",IDC_WRITE_PLAY_COUNTER,"Button",BS_AUTOCHECKBOX | WS_GROUP | WS_TABSTOP,14,88,70,10
+    EDITTEXT        IDC_TAG_PLAY_COUNTER,90,87,196,12,ES_AUTOHSCROLL
+    CONTROL         "First Played",IDC_WRITE_FIRST_PLAYED,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,102,70,10
+    EDITTEXT        IDC_TAG_FIRST_PLAYED,90,101,196,12,ES_AUTOHSCROLL
+    CONTROL         "Last Played",IDC_WRITE_LAST_PLAYED,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,116,70,10
+    EDITTEXT        IDC_TAG_LAST_PLAYED,90,115,196,12,ES_AUTOHSCROLL
+    CONTROL         "Play Stamp",IDC_WRITE_PLAY_STAMP,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,130,70,10
+    EDITTEXT        IDC_TAG_PLAY_STAMP,90,129,196,12,ES_AUTOHSCROLL
+    CONTROL         "Only update statistics for tracks in the media library",IDC_ONLY_LIBRARY,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,146,272,10
+
+    // Prune follows the checkbox; Remove all takes the whole table either way, so
+    // the checkbox does not gate it.
+    GROUPBOX        "Storage",IDC_STATIC,6,168,290,90
+    CONTROL         "Store statistics in file tags",IDC_STORAGE_TAGS,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,14,182,272,10
+    CONTROL         "Store statistics in an SQLite database (playback_stats.db, in profile folder)",IDC_STORAGE_DATABASE,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,14,196,272,10
+    CONTROL         "Store statistics in tags, with the database as a fallback",IDC_STORAGE_FALLBACK,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,14,210,272,10
+    PUSHBUTTON      "Prune stale entries",IDC_PRUNE_DATABASE,14,224,110,14
+    PUSHBUTTON      "Remove all entries",IDC_CLEAR_DATABASE,132,224,110,14
+    CONTROL         "Also prune entries for tracks outside the media library",IDC_PRUNE_OUTSIDE_LIBRARY,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,242,272,10
+
+    // The display fields bind their names once, when foobar2000 starts.
+    LTEXT           "Renamed tags show at once in Properties, but as %fields% only after a restart.",IDC_RESTART_NOTE,6,262,290,16
+END

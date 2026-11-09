@@ -1,0 +1,272 @@
+# foo_playback_custom - 32-bit and 64-bit foobar2000 component DLLs, built with MSVC.
+# Run build.bat, or nmake /f build.nmake with the toolchain environment active.
+# Builds whichever arch's toolset is present and warns about a missing one; nmake upcases env names.
+# ------------------------------------------------------------------
+
+!IFNDEF HOST32
+HOST32 =
+!IF EXIST("$(VCTOOLSINSTALLDIR)bin\Hostx64\x86\cl.exe")
+HOST32 = x64
+!ELSEIF EXIST("$(VCTOOLSINSTALLDIR)bin\Hostx86\x86\cl.exe")
+HOST32 = x86
+!ENDIF
+!ENDIF
+
+!IFNDEF HOST64
+HOST64 =
+!IF EXIST("$(VCTOOLSINSTALLDIR)bin\Hostx64\x64\cl.exe")
+HOST64 = x64
+!ELSEIF EXIST("$(VCTOOLSINSTALLDIR)bin\Hostx86\x64\cl.exe")
+HOST64 = x86
+!ENDIF
+!ENDIF
+
+CL32    = "$(VCTOOLSINSTALLDIR)bin\Host$(HOST32)\x86\cl.exe"
+CL64    = "$(VCTOOLSINSTALLDIR)bin\Host$(HOST64)\x64\cl.exe"
+LINK32  = "$(VCTOOLSINSTALLDIR)bin\Host$(HOST32)\x86\link.exe"
+LINK64  = "$(VCTOOLSINSTALLDIR)bin\Host$(HOST64)\x64\link.exe"
+LIBEXE32 = "$(VCTOOLSINSTALLDIR)bin\Host$(HOST32)\x86\lib.exe"
+LIBEXE64 = "$(VCTOOLSINSTALLDIR)bin\Host$(HOST64)\x64\lib.exe"
+
+# No version resource: foobar2000 takes the version from DECLARE_COMPONENT_VERSION in the source.
+BASE = /nologo /O2 /MD /EHsc /W3 /std:c++20 /permissive- /utf-8 /DNDEBUG /DUNICODE /D_UNICODE /DWIN32 \
+       /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS /D_USRDLL \
+       /DFOOBAR2000_TARGET_VERSION=$(FB2K_TARGET)
+
+INCLUDES = /I. /Iresource /I"$(SDK_DIR)" /I"$(SDK_DIR)\foobar2000"
+
+SRCS = foo_playback_custom.cpp core\config.cpp core\db.cpp core\expose.cpp core\playback.cpp core\preferences.cpp core\statistics.cpp
+# The build writes the component layout directly - x86 at the root of release\, the x64
+# build in release\x64\ - which is exactly what a .fb2k-component holds.
+OUT32 = release\foo_playback_custom.dll
+OUT64 = release\x64\foo_playback_custom.dll
+
+# The preferences page is a dialog template, so the resource script is compiled
+# per architecture and linked into the DLL.
+RESSRC = resource\foo_playback_custom.rc
+RES32  = obj\x86\foo_playback_custom.res
+RES64  = obj\x64\foo_playback_custom.res
+
+# ---------------------------------------------------------------- deps
+
+# Pinned foobar2000 SDK; the URL, the tree name and the header probe all derive from it.
+SDK_VER = 2026-09-17
+SDK_SHA = 24fa95ed66b42624f593fd4b94c5efb08ae81dfebb92b79fe69c8cd170961e48
+SDK_URL = https://www.foobar2000.org/downloads/SDK-$(SDK_VER).7z
+
+# foobar2000 API level to build against: 81 = 2.0. The component and the support
+# library have to agree on it, so both flag sets read it from here.
+FB2K_TARGET = 81
+
+
+DEPS_DIR = deps
+SDK_DIR  = $(DEPS_DIR)\foobar2000-sdk-$(SDK_VER)
+SDKHDR   = $(SDK_DIR)\foobar2000\SDK\foobar2000.h
+
+# shared-<arch>.lib is only the import library for the product's shared.dll, so the
+# component client and pfc that follow are built from source.
+SDKSHARED32 = $(SDK_DIR)\foobar2000\shared\shared-Win32.lib
+SDKSHARED64 = $(SDK_DIR)\foobar2000\shared\shared-x64.lib
+
+# The tarball's own root directory repeats the name --fetchdep extracts into.
+
+# ---------------------------------------------------------------- SDK support libs
+#
+# One combined static library per architecture goes into deps\lib, from objects in
+# obj\sdk*: `clean` takes the objects with the rest of obj\ but leaves the library,
+# `cleandep` takes the library too - the next build then builds both again from the
+# fetched sources, with no re-download. The libraries depend on their sources only, so a
+# change to a support flag below needs `build.bat cleandep` to take effect.
+# The lists are the SDK projects' own source lists minus the stdafx stubs, which only
+# generate precompiled headers.
+
+SDK_PFC_SRCS = \
+	$(SDK_DIR)\pfc\audio_math.cpp $(SDK_DIR)\pfc\audio_sample.cpp $(SDK_DIR)\pfc\base64.cpp $(SDK_DIR)\pfc\bigmem.cpp \
+	$(SDK_DIR)\pfc\bit_array.cpp $(SDK_DIR)\pfc\bsearch.cpp $(SDK_DIR)\pfc\charDownConvert.cpp $(SDK_DIR)\pfc\cpuid.cpp \
+	$(SDK_DIR)\pfc\crashWithMessage.cpp $(SDK_DIR)\pfc\filehandle.cpp $(SDK_DIR)\pfc\filetimetools.cpp $(SDK_DIR)\pfc\guid.cpp \
+	$(SDK_DIR)\pfc\nix-objects.cpp $(SDK_DIR)\pfc\other.cpp $(SDK_DIR)\pfc\pathUtils.cpp $(SDK_DIR)\pfc\printf.cpp \
+	$(SDK_DIR)\pfc\selftest.cpp $(SDK_DIR)\pfc\SmartStrStr.cpp $(SDK_DIR)\pfc\sort.cpp $(SDK_DIR)\pfc\splitString2.cpp \
+	$(SDK_DIR)\pfc\string_base.cpp $(SDK_DIR)\pfc\string_conv.cpp $(SDK_DIR)\pfc\string-compare.cpp $(SDK_DIR)\pfc\string-conv-lite.cpp \
+	$(SDK_DIR)\pfc\string-lite.cpp $(SDK_DIR)\pfc\threads.cpp $(SDK_DIR)\pfc\timers.cpp $(SDK_DIR)\pfc\unicode-normalize.cpp \
+	$(SDK_DIR)\pfc\utf8.cpp $(SDK_DIR)\pfc\wildcard.cpp $(SDK_DIR)\pfc\win-objects.cpp
+
+SDK_FB2K_SRCS = \
+	$(SDK_DIR)\foobar2000\SDK\abort_callback.cpp $(SDK_DIR)\foobar2000\SDK\advconfig.cpp $(SDK_DIR)\foobar2000\SDK\album_art.cpp $(SDK_DIR)\foobar2000\SDK\app_close_blocker.cpp \
+	$(SDK_DIR)\foobar2000\SDK\audio_chunk.cpp $(SDK_DIR)\foobar2000\SDK\audio_chunk_channel_config.cpp $(SDK_DIR)\foobar2000\SDK\cfg_var.cpp $(SDK_DIR)\foobar2000\SDK\cfg_var_legacy.cpp \
+	$(SDK_DIR)\foobar2000\SDK\chapterizer.cpp $(SDK_DIR)\foobar2000\SDK\commandline.cpp $(SDK_DIR)\foobar2000\SDK\commonObjects.cpp $(SDK_DIR)\foobar2000\SDK\completion_notify.cpp \
+	$(SDK_DIR)\foobar2000\SDK\componentversion.cpp $(SDK_DIR)\foobar2000\SDK\config_io_callback.cpp $(SDK_DIR)\foobar2000\SDK\config_object.cpp $(SDK_DIR)\foobar2000\SDK\configStore.cpp \
+	$(SDK_DIR)\foobar2000\SDK\console.cpp $(SDK_DIR)\foobar2000\SDK\dsp.cpp $(SDK_DIR)\foobar2000\SDK\dsp_manager.cpp $(SDK_DIR)\foobar2000\SDK\file_cached_impl.cpp \
+	$(SDK_DIR)\foobar2000\SDK\file_info.cpp $(SDK_DIR)\foobar2000\SDK\file_info_const_impl.cpp $(SDK_DIR)\foobar2000\SDK\file_info_impl.cpp $(SDK_DIR)\foobar2000\SDK\file_info_merge.cpp \
+	$(SDK_DIR)\foobar2000\SDK\file_operation_callback.cpp $(SDK_DIR)\foobar2000\SDK\filesystem.cpp $(SDK_DIR)\foobar2000\SDK\filesystem_helper.cpp $(SDK_DIR)\foobar2000\SDK\foosort.cpp \
+	$(SDK_DIR)\foobar2000\SDK\fsItem.cpp $(SDK_DIR)\foobar2000\SDK\guids.cpp $(SDK_DIR)\foobar2000\SDK\hasher_md5.cpp $(SDK_DIR)\foobar2000\SDK\image.cpp \
+	$(SDK_DIR)\foobar2000\SDK\input.cpp $(SDK_DIR)\foobar2000\SDK\input_file_type.cpp $(SDK_DIR)\foobar2000\SDK\link_resolver.cpp $(SDK_DIR)\foobar2000\SDK\main_thread_callback.cpp \
+	$(SDK_DIR)\foobar2000\SDK\mainmenu.cpp $(SDK_DIR)\foobar2000\SDK\mem_block_container.cpp $(SDK_DIR)\foobar2000\SDK\menu_helpers.cpp $(SDK_DIR)\foobar2000\SDK\menu_item.cpp \
+	$(SDK_DIR)\foobar2000\SDK\menu_manager.cpp $(SDK_DIR)\foobar2000\SDK\metadb.cpp $(SDK_DIR)\foobar2000\SDK\metadb_handle.cpp $(SDK_DIR)\foobar2000\SDK\metadb_handle_list.cpp \
+	$(SDK_DIR)\foobar2000\SDK\output.cpp $(SDK_DIR)\foobar2000\SDK\packet_decoder.cpp $(SDK_DIR)\foobar2000\SDK\playable_location.cpp $(SDK_DIR)\foobar2000\SDK\playback_control.cpp \
+	$(SDK_DIR)\foobar2000\SDK\playlist.cpp $(SDK_DIR)\foobar2000\SDK\playlist_loader.cpp $(SDK_DIR)\foobar2000\SDK\popup_message.cpp $(SDK_DIR)\foobar2000\SDK\preferences_page.cpp \
+	$(SDK_DIR)\foobar2000\SDK\replaygain.cpp $(SDK_DIR)\foobar2000\SDK\replaygain_info.cpp $(SDK_DIR)\foobar2000\SDK\service.cpp $(SDK_DIR)\foobar2000\SDK\tag_processor.cpp \
+	$(SDK_DIR)\foobar2000\SDK\tag_processor_id3v2.cpp $(SDK_DIR)\foobar2000\SDK\threaded_process.cpp $(SDK_DIR)\foobar2000\SDK\titleformat.cpp $(SDK_DIR)\foobar2000\SDK\track_property.cpp \
+	$(SDK_DIR)\foobar2000\SDK\ui.cpp $(SDK_DIR)\foobar2000\SDK\ui_element.cpp $(SDK_DIR)\foobar2000\SDK\utility.cpp
+
+SDK_SUPPORT_SRCS = $(SDK_PFC_SRCS) $(SDK_FB2K_SRCS) \
+	$(SDK_DIR)\foobar2000\foobar2000_component_client\component_client.cpp
+
+# SDK code is not ours, so no /W3; C++20 and /MD match the SDK projects.
+SDK_SUPPORT_FLAGS = /nologo /c /O2 /MD /DNDEBUG /EHsc /std:c++20 \
+	/DUNICODE /D_UNICODE /DWIN32 \
+	/D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS \
+	/DFOOBAR2000_TARGET_VERSION=$(FB2K_TARGET) \
+	/I"$(SDK_DIR)" /I"$(SDK_DIR)\pfc" /I"$(SDK_DIR)\foobar2000" \
+	/I"$(SDK_DIR)\foobar2000\SDK"
+
+SUPPORTLIB32 = $(DEPS_DIR)\lib\x86\foobar2000_support.lib
+SUPPORTLIB64 = $(DEPS_DIR)\lib\x64\foobar2000_support.lib
+SDKOBJ32 = obj\sdk32
+SDKOBJ64 = obj\sdk64
+
+# What MSBuild links into a Windows DLL implicitly; pfc and the SDK pull in pieces of all.
+SYSLIBS = kernel32.lib user32.lib gdi32.lib advapi32.lib shell32.lib ole32.lib \
+          oleaut32.lib uuid.lib shlwapi.lib comctl32.lib uxtheme.lib
+
+VCLIB  = $(VCTOOLSINSTALLDIR)lib
+SDKLIB = $(WINDOWSSDKDIR)Lib\$(WINDOWSSDKVERSION)
+
+LIBPATH32 = /LIBPATH:"$(VCLIB)\x86" \
+            /LIBPATH:"$(SDKLIB)\ucrt\x86" \
+            /LIBPATH:"$(SDKLIB)\um\x86"
+LIBPATH64 = /LIBPATH:"$(VCLIB)\x64" \
+            /LIBPATH:"$(SDKLIB)\ucrt\x64" \
+            /LIBPATH:"$(SDKLIB)\um\x64"
+
+X86_LIBS =
+!IF EXIST("$(VCTOOLSINSTALLDIR)lib\x86") && EXIST("$(WINDOWSSDKDIR)Lib\$(WINDOWSSDKVERSION)\ucrt\x86") && EXIST("$(WINDOWSSDKDIR)Lib\$(WINDOWSSDKVERSION)\um\x86")
+X86_LIBS = 1
+!ENDIF
+
+X64_LIBS =
+!IF EXIST("$(VCTOOLSINSTALLDIR)lib\x64") && EXIST("$(WINDOWSSDKDIR)Lib\$(WINDOWSSDKVERSION)\ucrt\x64") && EXIST("$(WINDOWSSDKDIR)Lib\$(WINDOWSSDKVERSION)\um\x64")
+X64_LIBS = 1
+!ENDIF
+
+X32_OK = 1
+!IF "$(HOST32)"=="" || "$(X86_LIBS)"==""
+X32_OK =
+!ENDIF
+
+X64_OK = 1
+!IF "$(HOST64)"=="" || "$(X64_LIBS)"==""
+X64_OK =
+!ENDIF
+
+NO_X32 = 32-bit toolset
+!IF "$(HOST32)"!=""
+NO_X32 = 32-bit libraries
+!ENDIF
+
+NO_X64 = 64-bit toolset
+!IF "$(HOST64)"!=""
+NO_X64 = 64-bit libraries
+!ENDIF
+
+!IF "$(X32_OK)"!="" && "$(X64_OK)"!=""
+ALL_TARGETS = $(OUT32) $(OUT64)
+!ELSEIF "$(X32_OK)"!=""
+ALL_TARGETS = $(OUT32)
+!ELSEIF "$(X64_OK)"!=""
+ALL_TARGETS = $(OUT64)
+!ELSE
+ALL_TARGETS =
+!ENDIF
+
+all: toolchain $(ALL_TARGETS)
+!IF "$(X32_OK)"==""
+	@echo   skipped the 32-bit DLL - no $(NO_X32)
+!ENDIF
+!IF "$(X64_OK)"==""
+	@echo   skipped the 64-bit DLL - no $(NO_X64)
+!ENDIF
+
+toolchain:
+	@if "$(VCTOOLSINSTALLDIR)"=="" (echo Error: no toolchain environment - run build.bat, or activate one first & exit 1)
+	@if "$(X32_OK)$(X64_OK)"=="" (echo Error: no usable toolset under "$(VCTOOLSINSTALLDIR)bin" - neither arch's compiler and libraries are present & exit 1)
+
+# The pinned dependencies have to be on disk before anything includes them; fetch gets them.
+depsources:
+	@if not exist "$(SDKHDR)" (echo Error: the foobar2000 SDK is missing from $(DEPS_DIR)\ & echo        Run: build.bat fetch & exit 1)
+	@if not exist "$(SDK_DIR)\pfc\pfc-lite.h" (echo Error: the SDK pfc sources are missing from $(SDK_DIR)\ & echo        Run: build.bat fetch & exit 1)
+	@if not exist "$(SDKSHARED32)" (echo Error: the foobar2000 SDK shared library is missing from $(SDK_DIR)\foobar2000\shared\ & echo        Run: build.bat fetch & exit 1)
+
+fetch:
+	@if not exist $(DEPS_DIR) mkdir $(DEPS_DIR)
+	@call build.bat --fetchdep foobar2000-sdk $(SDK_VER) $(SDK_SHA) $(SDK_URL)
+	@echo $(DEPS_DIR)\ ready.
+
+obj:
+	@if not exist obj mkdir obj
+
+obj\x86: obj
+	@if not exist obj\x86 mkdir obj\x86
+
+obj\x64: obj
+	@if not exist obj\x64 mkdir obj\x64
+
+release:
+	@if not exist release mkdir release
+
+release\x64: release
+	@if not exist release\x64 mkdir release\x64
+
+$(RES32): $(RESSRC) resource\resource.h
+	@if not exist obj\x86 mkdir obj\x86
+	rc.exe /nologo /Iresource /fo"$@" "$(RESSRC)"
+
+$(RES64): $(RESSRC) resource\resource.h
+	@if not exist obj\x64 mkdir obj\x64
+	rc.exe /nologo /Iresource /fo"$@" "$(RESSRC)"
+
+# One cl invocation per arch for the whole support set, then one archive.
+$(SUPPORTLIB32): $(SDK_SUPPORT_SRCS)
+	@if not exist $(SDKOBJ32) mkdir $(SDKOBJ32)
+	@if not exist $(DEPS_DIR)\lib\x86 mkdir $(DEPS_DIR)\lib\x86
+	$(CL32) $(SDK_SUPPORT_FLAGS) /Fo$(SDKOBJ32)\ $(SDK_SUPPORT_SRCS)
+	$(LIBEXE32) /nologo /OUT:$@ $(SDKOBJ32)\*.obj
+
+$(SUPPORTLIB64): $(SDK_SUPPORT_SRCS)
+	@if not exist $(SDKOBJ64) mkdir $(SDKOBJ64)
+	@if not exist $(DEPS_DIR)\lib\x64 mkdir $(DEPS_DIR)\lib\x64
+	$(CL64) $(SDK_SUPPORT_FLAGS) /Fo$(SDKOBJ64)\ $(SDK_SUPPORT_SRCS)
+	$(LIBEXE64) /nologo /OUT:$@ $(SDKOBJ64)\*.obj
+
+# One compile-and-link per arch. The import library the linker produces for a DLL
+# is useless to a component, so it is sent to obj\ rather than left beside the DLL.
+$(OUT32): toolchain depsources $(SUPPORTLIB32) $(RES32) obj\x86 release $(SRCS) build.nmake
+    $(CL32) $(BASE) $(INCLUDES) $(SRCS) /Foobj\x86\ /link /DLL /OUT:$@ /IMPLIB:obj\x86\foo_playback_custom.lib \
+		$(RES32) $(LIBPATH32) "$(SUPPORTLIB32)" "$(SDKSHARED32)" $(SYSLIBS)
+	@$(LINK32) /dump /exports $@ | findstr /C:"foobar2000_get_interface" >NUL || (echo Error: $@ does not export foobar2000_get_interface - foobar2000 would not load it & exit 1)
+	@$(LINK32) /dump /headers $@ | findstr /C:"14C machine" >NUL || (echo Error: $@ is not a 32-bit binary & exit 1)
+
+$(OUT64): toolchain depsources $(SUPPORTLIB64) $(RES64) obj\x64 release\x64 $(SRCS) build.nmake
+	$(CL64) $(BASE) $(INCLUDES) $(SRCS) /Foobj\x64\ /link /DLL /OUT:$@ /IMPLIB:obj\x64\foo_playback_custom.lib \
+		$(RES64) $(LIBPATH64) "$(SUPPORTLIB64)" "$(SDKSHARED64)" $(SYSLIBS)
+	@$(LINK64) /dump /exports $@ | findstr /C:"foobar2000_get_interface" >NUL || (echo Error: $@ does not export foobar2000_get_interface - foobar2000 would not load it & exit 1)
+	@$(LINK64) /dump /headers $@ | findstr /C:"8664 machine" >NUL || (echo Error: $@ is not a 64-bit binary & exit 1)
+
+# The component's own outputs, plus obj\ which the SDK objects share. deps\lib is
+# cleandep's, and release\ stays - a packaged .fb2k-component is not the build's to
+# delete. No line here may return non-zero: nmake treats that as a fatal error and stops
+# the whole run.
+clean:
+	@if not exist obj if not exist $(OUT32) if not exist release\x64 if not exist release\*.fb2k-component echo   nothing to remove
+	@if exist obj (rmdir /s /q obj & echo   removed obj\)
+	@if exist release\x64 (rmdir /s /q release\x64 & echo   removed release\x64\)
+	@if exist $(OUT32) (del /q $(OUT32) & echo   removed $(OUT32))
+
+# The built dependencies only. The fetched trees under deps\ are left alone, so this is a
+# rebuild of them rather than a re-download. The SDK objects go with the libraries they
+# were archived into: the recipe compiles the whole set again anyway, so leaving them
+# would only be dead weight.
+cleandep:
+	@if not exist $(DEPS_DIR)\lib if not exist $(SDKOBJ32) if not exist $(SDKOBJ64) echo   nothing to remove
+	@if exist $(DEPS_DIR)\lib (rmdir /s /q $(DEPS_DIR)\lib & echo   removed $(DEPS_DIR)\lib\)
+	@if exist $(SDKOBJ32) (rmdir /s /q $(SDKOBJ32) & echo   removed $(SDKOBJ32)\)
+	@if exist $(SDKOBJ64) (rmdir /s /q $(SDKOBJ64) & echo   removed $(SDKOBJ64)\)

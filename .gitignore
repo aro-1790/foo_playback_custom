@@ -1,0 +1,12 @@
+# Private tooling (not part of this repo)
+*.sh
+_re/
+.pi/
+AGENTS.md
+
+# Build artifacts
+obj/
+release/
+
+# Fetched SDK, restored by build.bat fetch
+deps/
