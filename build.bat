@@ -41,6 +41,17 @@ if not defined VCToolsInstallDir (
     exit /b 1
 )
 
+rem Normalize toolchain path vars so build.nmake's path concatenations work
+rem with official VC Tools, portablemsvc, or msvc-kit alike. msvc-kit registers
+rem VCToolsInstallDir and WindowsSdkDir without a trailing backslash, so add one
+rem when missing. WindowsSDKVersion already carries its own trailing backslash.
+if defined VCToolsInstallDir (
+    if not "%VCToolsInstallDir:~-1%"=="\" set "VCToolsInstallDir=%VCToolsInstallDir%\"
+)
+if defined WindowsSdkDir (
+    if not "%WindowsSdkDir:~-1%"=="\" set "WindowsSdkDir=%WindowsSdkDir%\"
+)
+
 :nmake
 nmake /NOLOGO /f build.nmake %TARGET%
 exit /b %errorlevel%

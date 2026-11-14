@@ -129,7 +129,12 @@ SYSLIBS = kernel32.lib user32.lib gdi32.lib advapi32.lib shell32.lib ole32.lib \
           oleaut32.lib uuid.lib shlwapi.lib comctl32.lib uxtheme.lib
 
 VCLIB  = $(VCTOOLSINSTALLDIR)lib
-SDKLIB = $(WINDOWSSDKDIR)Lib\$(WINDOWSSDKVERSION)
+# WindowsSDKVersion carries a trailing backslash of its own (MS and msvc-kit agree
+# on this one), so strip it; every Bin\ and Lib\ path below supplies its own
+# separator.
+SDKVER = $(WINDOWSSDKVERSION:\=)
+
+SDKLIB = $(WINDOWSSDKDIR)Lib\$(SDKVER)
 
 LIBPATH32 = /LIBPATH:"$(VCLIB)\x86" \
             /LIBPATH:"$(SDKLIB)\ucrt\x86" \
@@ -139,12 +144,12 @@ LIBPATH64 = /LIBPATH:"$(VCLIB)\x64" \
             /LIBPATH:"$(SDKLIB)\um\x64"
 
 X86_LIBS =
-!IF EXIST("$(VCTOOLSINSTALLDIR)lib\x86") && EXIST("$(WINDOWSSDKDIR)Lib\$(WINDOWSSDKVERSION)\ucrt\x86") && EXIST("$(WINDOWSSDKDIR)Lib\$(WINDOWSSDKVERSION)\um\x86")
+!IF EXIST("$(VCTOOLSINSTALLDIR)lib\x86") && EXIST("$(WINDOWSSDKDIR)Lib\$(SDKVER)\ucrt\x86") && EXIST("$(WINDOWSSDKDIR)Lib\$(SDKVER)\um\x86")
 X86_LIBS = 1
 !ENDIF
 
 X64_LIBS =
-!IF EXIST("$(VCTOOLSINSTALLDIR)lib\x64") && EXIST("$(WINDOWSSDKDIR)Lib\$(WINDOWSSDKVERSION)\ucrt\x64") && EXIST("$(WINDOWSSDKDIR)Lib\$(WINDOWSSDKVERSION)\um\x64")
+!IF EXIST("$(VCTOOLSINSTALLDIR)lib\x64") && EXIST("$(WINDOWSSDKDIR)Lib\$(SDKVER)\ucrt\x64") && EXIST("$(WINDOWSSDKDIR)Lib\$(SDKVER)\um\x64")
 X64_LIBS = 1
 !ENDIF
 
